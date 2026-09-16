@@ -101,7 +101,7 @@ package body Operations_Research is
       Num_Cons  : constant Positive := Bounds'Length;
       Rows      : constant Positive := Num_Cons + 1;
       Cols      : constant Positive := Num_Vars + Num_Cons + 1;
-      Tableau   : Matrix_Type (1 .. Rows, 1 .. Cols) := (others => (others => 0.0));
+      Tableau   : Matrix_Type (1 .. Rows, 1 .. Cols) := [others => [others => 0.0]];
       Basis     : Index_Array (1 .. Num_Cons);
    begin
       -- Standard form restricts bounds to non-negative (origin is feasible)
@@ -161,11 +161,9 @@ package body Operations_Research is
       Dual_Cons : constant Positive := Num_Vars;
       Rows      : constant Positive := Dual_Cons + 1;
       Cols      : constant Positive := Dual_Vars + Dual_Cons + 1;
-      Tableau   : Matrix_Type (1 .. Rows, 1 .. Cols) := (others => (others => 0.0));
+      Tableau   : Matrix_Type (1 .. Rows, 1 .. Cols) := [others => [others => 0.0]];
       Basis     : Index_Array (1 .. Dual_Cons);
-      
-      -- We extract the result from the Objective Row directly, we don't need Basis here
-      pragma Unreferenced (Basis);
+      pragma Warnings (Off, Basis);
    begin
       -- Standard form minimization implies strictly non-negative objective coefficients.
       for C of Objective loop
