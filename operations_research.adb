@@ -1,18 +1,27 @@
 package body Operations_Research is
 
+   type Index_Array is array (Positive range <>) of Positive;
+
    -- Core simplex tableau solver used by both Maximize and Minimize.
-   -- Implements standard tableau pivot logic until optimality or unboundedness is reached.
+   -- Implements standard tableau pivot logic and maintains the Basis array.
    procedure Solve_Tableau
      (Tableau  : in out Matrix_Type;
       Num_Vars : in Positive;
-      Num_Cons : in Positive)
+      Num_Cons : in Positive;
+      Basis    : out Index_Array)
    is
-      Pivot_Row, Pivot_Col : Positive;
+      Pivot_Row : Positive := 1;
+      Pivot_Col : Positive := 1;
       Found : Boolean;
       Rows : constant Positive := Num_Cons + 1;
       Cols : constant Positive := Num_Vars + Num_Cons + 1;
       Tolerance : constant Value_Type := 1.0e-9;
    begin
+      -- Initialize basis to the slack variables
+      for I in 1 .. Num_Cons loop
+         Basis (I) := Num_Vars + I;
+      end loop;
+
       loop
          -- 1. Find pivot column: most negative element in the objective row
          declare
@@ -33,7 +42,7 @@ package body Operations_Research is
 
          -- 2. Find pivot row: minimum positive ratio of RHS to Pivot Column element
          declare
-            Min_Ratio_Val : Value_Type;
+            Min_Ratio_Val : Value_Type := Value_Type'Last;
             Ratio         : Value_Type;
          begin
             Found := False;
@@ -55,6 +64,8 @@ package body Operations_Research is
          end if;
 
          -- 3. Pivot Operation
+         Basis (Pivot_Row) := Pivot_Col;
+
          declare
             Pivot_Val : constant Value_Type := Tableau (Pivot_Row, Pivot_Col);
          begin
@@ -91,7 +102,7 @@ package body Operations_Research is
       Rows      : constant Positive := Num_Cons + 1;
       Cols      : constant Positive := Num_Vars + Num_Cons + 1;
       Tableau   : Matrix_Type (1 .. Rows, 1 .. Cols) := (others => (others => 0.0));
-      Tolerance : constant Value_Type := 1.0e-9;
+      Basis     : Index_Array (1 .. Num_Cons);
    begin
       -- Standard form restricts bounds to non-negative (origin is feasible)
       for B of Bounds loop
@@ -114,31 +125,24 @@ package body Operations_Research is
          Tableau (Rows, J) := -Objective (Objective'First + J - 1);
       end loop;
 
-      Solve_Tableau (Tableau, Num_Vars, Num_Cons);
+      Solve_Tableau (Tableau, Num_Vars, Num_Cons, Basis);
 
       Max_Value := Tableau (Rows, Cols);
 
-      -- Extract solution for Primal variables
+      -- Extract solution for Primal variables from the established Basis
       for J in 1 .. Num_Vars loop
          Solution (Solution'First + J - 1) := 0.0;
-         declare
-            Ones    : Natural := 0;
-            Zeros   : Natural := 0;
-            Row_Idx : Natural := 0;
-         begin
-            for I in 1 .. Num_Cons loop
-               if abs (Tableau (I, J) - 1.0) < Tolerance then
-                  Ones := Ones + 1;
-                  Row_Idx := I;
-               elsif abs (Tableau (I, J)) < Tolerance then
-                  Zeros := Zeros + 1;
-               end if;
-            end loop;
-            -- A basic variable has exactly one 1 and the rest 0s in its column
-            if Ones = 1 and then Zeros = Num_Cons - 1 then
-               Solution (Solution'First + J - 1) := Tableau (Row_Idx, Cols);
-            end if;
-         end;
+      end loop;
+      
+      for I in 1 .. Num_Cons loop
+         if Basis (I) <= Num_Vars then
+            declare
+               Val : constant Value_Type := Tableau (I, Cols);
+            begin
+               -- Clamp to 0.0 to discard trivial floating-point drift (e.g., -1.0e-15)
+               Solution (Solution'First + Basis (I) - 1) := (if Val < 0.0 then 0.0 else Val);
+            end;
+         end if;
       end loop;
    end Maximize;
 
@@ -158,6 +162,10 @@ package body Operations_Research is
       Rows      : constant Positive := Dual_Cons + 1;
       Cols      : constant Positive := Dual_Vars + Dual_Cons + 1;
       Tableau   : Matrix_Type (1 .. Rows, 1 .. Cols) := (others => (others => 0.0));
+      Basis     : Index_Array (1 .. Dual_Cons);
+      
+      -- We extract the result from the Objective Row directly, we don't need Basis here
+      pragma Unreferenced (Basis);
    begin
       -- Standard form minimization implies strictly non-negative objective coefficients.
       for C of Objective loop
@@ -180,14 +188,18 @@ package body Operations_Research is
          Tableau (Rows, J) := -Bounds (Bounds'First + J - 1);
       end loop;
 
-      Solve_Tableau (Tableau, Dual_Vars, Dual_Cons);
+      Solve_Tableau (Tableau, Dual_Vars, Dual_Cons, Basis);
 
       -- Max of Dual is Min of Primal
       Min_Value := Tableau (Rows, Cols);
 
       -- Extract solution for Primal from the Dual's slack variables in the objective row.
       for J in 1 .. Num_Vars loop
-         Solution (Solution'First + J - 1) := Tableau (Rows, Dual_Vars + J);
+         declare
+            Val : constant Value_Type := Tableau (Rows, Dual_Vars + J);
+         begin
+            Solution (Solution'First + J - 1) := (if Val < 0.0 then 0.0 else Val);
+         end;
       end loop;
    end Minimize;
 
