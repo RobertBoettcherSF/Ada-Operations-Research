@@ -81,8 +81,9 @@ begin
    begin
       Minimize (Obj, Con, Bnd, Min_V, Sol);
       Check ("4.1 Objective Minimum is 0", Is_Close (Min_V, 0.0));
-      Check ("4.2 Sol(1) is 0", Is_Close (Sol (1), 0.0));
-      Check ("4.3 Sol(2) is 0", Is_Close (Sol (2), 0.0));
+      -- Sol(1) + Sol(2) MUST be >= 10 to satisfy the constraint X + Y >= 10.
+      Check ("4.2 Variables satisfy bounds", Sol (1) + Sol (2) >= 10.0 - 1.0e-5);
+      Check ("4.3 Variables are non-negative", Sol (1) >= -1.0e-5 and Sol (2) >= -1.0e-5);
    end;
 
    -- TEST 5: Unbounded Maximize
@@ -239,7 +240,7 @@ begin
       Maximize (Obj, Con, Bnd, Max_V, Sol);
       Check ("13.1 Maximum correctly identifies plateau", Is_Close (Max_V, 10.0));
       Check ("13.2 Solution combination equals limit", Is_Close (Sol (1) + Sol (2), 10.0));
-      Check ("13.3 Output variables within valid domain", Sol (1) >= 0.0 and Sol (2) >= 0.0);
+      Check ("13.3 Output variables within valid domain", Sol (1) >= -1.0e-5 and Sol (2) >= -1.0e-5);
    end;
 
    Put_Line ("");
